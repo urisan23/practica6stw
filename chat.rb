@@ -2,7 +2,7 @@
 require 'sinatra'
 require 'thin'
 
-set server: 'thin', connections: [], h: {}
+set server: 'thin', connections: [], priv: {}
 
 get '/' do
    halt erb(:login) unless params[:user]
@@ -12,12 +12,12 @@ end
 get '/stream/:user', provides: 'text/event-stream' do
   stream :keep_open do |out|
     settings.connections << out
-    settings.h.store(params[:user].to_s.to_sym, out.__id__)
-    settings.connections.each { |out| out << "data: #{Time.now.strftime("%H:%M:%S")} > --- #{params[:user]} ha entrado al chat ---\n\n" }
+    settings.priv.store(params[:user].to_s.to_sym, out.__id__)
+    settings.connections.each { |out| out << "data: #{Time.now.strftime("%H:%M:%S")} > [#{params[:user]}] ha entrado al chat \n\n" }
     out.callback{ user_to_del = out.__id__
                   settings.connections.delete(out)
-                  settings.connections.each { |channel| channel << "data: #{Time.now.strftime("%H:%M:%S")} > --- #{settings.h.key(user_to_del)} ha salido del chat ---\n\n"}
-                  settings.h.delete(settings.h.key(user_to_del))
+                  settings.connections.each { |channel| channel << "data: #{Time.now.strftime("%H:%M:%S")} > [#{settings.priv.key(user_to_del)}] ha salido del chat \n\n"}
+                  settings.priv.delete(settings.priv.key(user_to_del))
                  }
 
 
@@ -27,13 +27,13 @@ end
 post '/' do
 
   message = params[:msg].split
-  if !(message[1].to_s =~ /^\/.+:$/)    #Si no va dirigido a otro usuario
+  if !(message[1].to_s =~ /^\/.+:$/)
     settings.connections.each { |out| out << "data: #{Time.now.strftime("%H:%M:%S")} > #{params[:msg]}\n\n" }
   else
      sender = message[0].to_s.delete ":"
      receiver = message[1].to_s.delete "/:"
-     id_receiver = settings.h[receiver.to_sym]
-     id_sender = settings.h[sender.to_sym]
+     id_receiver = settings.priv[receiver.to_sym]
+     id_sender = settings.priv[sender.to_sym]
      index_receiver, index_sender = nil, nil
      settings.connections.each { |x| if x.__id__ == id_receiver
                                         index_receiver = settings.connections.index(x)
